@@ -1,4 +1,4 @@
-# requirements.in
+# requirements.in - The single source of truth for dependencies
 
 fastapi
 uvicorn[standard]
@@ -11,4 +11,5 @@ requests
 playwright
 openai
 google-cloud-documentai
-PyPDF2 
+PyPDF2
+numpy 

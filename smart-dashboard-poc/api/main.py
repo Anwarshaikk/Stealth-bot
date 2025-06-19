@@ -3,24 +3,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
-from contextlib import asynccontextmanager
-import weaviate
 
 from .routers import resume, jobs, apply, settings
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Lifespan context manager for Weaviate client
-@asynccontextmanager
-def lifespan(app: FastAPI):
-    app.state.weaviate_client = weaviate.Client(os.getenv("WEAVIATE_URL"))
-    try:
-        yield
-    finally:
-        app.state.weaviate_client.close()
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(title="Stealth Bot API", version="0.1.0")
 
 # Enable CORS for the frontend
 app.add_middleware(

@@ -5,19 +5,67 @@ import requests
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException, Depends
 from ..models import Job, Candidate
+from ..deps import get_redis
 import json
 import logging
 from datetime import datetime, timedelta
+import openai
+import numpy as np
+import asyncio
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+async def _embed(text: str) -> np.ndarray:
+    """Create embeddings for text using OpenAI"""
+    response = await openai.AsyncOpenAI().embeddings.create(
+        input=text,
+        model="text-embedding-3-small"
+    )
+    return np.array(response.data[0].embedding)
 
-def get_redis():
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    return redis.from_url(redis_url)
+def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
+    """Compute cosine similarity between two vectors"""
+    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-8))
+
+async def rank_jobs(jobs: List[Job], candidate_skills: List[str]) -> List[Job]:
+    """Rank jobs based on candidate skills using embeddings"""
+    if not jobs or not candidate_skills:
+        return jobs
+    
+    try:
+        # Create candidate text from skills
+        candidate_text = " ".join(candidate_skills)
+        
+        # Embed candidate text
+        candidate_emb = await _embed(candidate_text)
+        
+        # Embed all job descriptions
+        job_descs = [job.description or "" for job in jobs]
+        job_embs = await asyncio.gather(*[_embed(desc) for desc in job_descs])
+        
+        # Compute scores and update jobs
+        scored_jobs = []
+        for job, emb in zip(jobs, job_embs):
+            score = cosine_sim(candidate_emb, emb)
+            # Convert score to percentage (0-100)
+            score_percentage = max(0, min(100, score * 100))
+            job.score = round(score_percentage, 1)
+            scored_jobs.append(job)
+        
+        # Sort by score (highest first) and return top 10
+        ranked_jobs = sorted(scored_jobs, key=lambda x: x.score or 0, reverse=True)[:10]
+        
+        logger.info(f"Ranked {len(jobs)} jobs, returning top {len(ranked_jobs)}")
+        return ranked_jobs
+        
+    except Exception as e:
+        logger.error(f"Error ranking jobs: {str(e)}")
+        # Return original jobs if ranking fails
+        return jobs
+
+router = APIRouter()
 
 def generate_cache_key(skills: List[str], location: str) -> str:
     """
@@ -130,12 +178,18 @@ async def get_jobs_for_candidate(candidate_id: str):
         jobs = scrape_indeed_jobs(candidate.skills)
         
         if jobs:
-            # Cache the results for 2 hours
+            logger.info(f"Ranking {len(jobs)} jobs for candidate {candidate_id}")
+            # Rank jobs based on candidate skills
+            ranked_jobs = await rank_jobs(jobs, candidate.skills)
+            
+            # Cache the ranked results for 2 hours
             redis_client.setex(
                 cache_key,
                 timedelta(hours=2),
-                json.dumps([job.dict() for job in jobs])
+                json.dumps([job.dict() for job in ranked_jobs])
             )
+            
+            return ranked_jobs
         
         return jobs
         

@@ -4,6 +4,8 @@ import Dropzone from "../components/Dropzone";
 import { useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import { X } from "lucide-react";
+import { useToast } from '../components/ToastContext';
+import { useCandidateStore } from '../store';
 // import { Toast } from "../components/Toast"; // No Toast utility found
 // import { Spinner } from "shadcn/ui"; // If you want to use a Spinner in the button
 
@@ -11,6 +13,8 @@ const Upload: React.FC = () => {
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const navigate = useNavigate();
+  const { addToast } = useToast();
+  const { setCandidate } = useCandidateStore();
 
   const handleRemove = (fileToRemove: File) => {
     setFiles((prev) => prev.filter((file) => file !== fileToRemove));
@@ -28,12 +32,24 @@ const Upload: React.FC = () => {
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json(); // { candidate_id, skills, ... }
-      // Toast.success('Parsed résumé successfully');
-      alert('Parsed résumé successfully');
+      
+      // Store the full candidate object in the global store
+      setCandidate(data);
+      
+      addToast({
+        title: 'Success',
+        description: 'Resume uploaded successfully! Redirecting to matches...',
+        variant: 'success',
+      });
       navigate(`/matches?candidate_id=${data.candidate_id}`);
     } catch (err: any) {
       // Toast.error(`Parsing failed: ${err.message}`);
-      alert(`Parsing failed: ${err.message}`);
+      const errorMessage = err.response?.data?.detail || err.message;
+      addToast({
+        title: 'Upload Failed',
+        description: `There was an error processing your resume: ${errorMessage}`,
+        variant: 'error',
+      });
     } finally {
       setUploading(false);
     }

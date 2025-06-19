@@ -2,4 +2,6 @@
 
 pip-tools
 flake8
-isort 
+isort
+pytest
+pytest-mock 

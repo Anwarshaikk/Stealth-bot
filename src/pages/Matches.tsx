@@ -19,20 +19,12 @@ interface Job {
   score?: number;
 }
 
-interface Candidate {
-  name: string;
-  location: string;
-  skills: string[];
-  experienceYears: number;
-  [key: string]: any;
-}
-
 const Matches: React.FC = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
-  const candidateId = useCandidateStore((state) => state.candidateId);
+  const { candidate } = useCandidateStore();
+  const candidateId = candidate?.candidate_id;
 
-  const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
@@ -142,7 +134,7 @@ const Matches: React.FC = () => {
           location: job.location,
           url: job.url,
           description: job.description,
-          score: 75 // Default score since backend doesn't provide one yet
+          score: job.score || 0 // Use the real score from API, with fallback to 0
         }));
         
         setJobs(transformedJobs);
@@ -169,9 +161,9 @@ const Matches: React.FC = () => {
         {candidate && (
           <CandidateSummary
             name={candidate.name}
-            location={candidate.location}
+            location={candidate.location || 'Location not specified'}
             skills={candidate.skills}
-            experienceYears={candidate.experienceYears}
+            experienceYears={candidate.experienceYears || 0}
           />
         )}
 

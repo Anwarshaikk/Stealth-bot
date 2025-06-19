@@ -1,11 +1,21 @@
 import { create } from 'zustand';
 
+interface Candidate {
+  candidate_id: string;
+  name: string;
+  email?: string;
+  location?: string;
+  skills: string[];
+  experienceYears?: number;
+  [key: string]: any;
+}
+
 interface CandidateStore {
-  candidateId: string | null;
-  setCandidateId: (id: string | null) => void;
+  candidate: Candidate | null;
+  setCandidate: (candidate: Candidate | null) => void;
 }
 
 export const useCandidateStore = create<CandidateStore>((set) => ({
-  candidateId: null,
-  setCandidateId: (id) => set({ candidateId: id }),
+  candidate: null,
+  setCandidate: (candidate) => set({ candidate }),
 })); 

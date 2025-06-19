@@ -9,17 +9,12 @@ from api.models import Candidate
 import redis
 from redis import Redis
 import logging
-from ..deps import get_redis_conn
+from ..deps import get_redis
 from ..services.docai_parser import parse_with_docai
 from ..services.gpt4_parser import parse_with_gpt4
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-def get_redis() -> Redis:
-    """Get Redis connection."""
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    return redis.from_url(redis_url)
 
 def ensure_storage_dir():
     """Ensure the storage directory exists."""
@@ -54,7 +49,7 @@ async def get_candidate(candidate_id: str, redis: Redis = Depends(get_redis)):
         raise HTTPException(status_code=404, detail="Candidate not found")
     return Candidate.parse_raw(candidate_data)
 
-@router.post("/resume/upload")
+@router.post("/upload", response_model=Candidate, status_code=201)
 async def create_resume(file: UploadFile = File(...)):
     try:
         # Create a temporary file to store the upload
@@ -72,7 +67,7 @@ async def create_resume(file: UploadFile = File(...)):
         os.rename(temp_path, permanent_path)
         
         # Get Redis connection
-        redis_conn = get_redis_conn()
+        redis_conn = get_redis()
         
         # Get parser preference from Redis
         parser_preference = redis_conn.get("settings:parser_preference")
@@ -92,24 +87,29 @@ async def create_resume(file: UploadFile = File(...)):
             else:  # Default to pyresparser
                 parsed_data = ResumeParser(permanent_path).get_extracted_data()
                 
-            # Store the parsed data in Redis
-            resume_key = f"resume:{file.filename}"
-            redis_conn.hset(resume_key, mapping={
-                "name": parsed_data.get("name", ""),
-                "email": parsed_data.get("email", ""),
-                "mobile_number": parsed_data.get("mobile_number", ""),
-                "skills": ",".join(parsed_data.get("skills", [])),
-                "experience": str(parsed_data.get("experience", [])),
-                "education": str(parsed_data.get("education", [])),
-                "file_path": permanent_path,
-                "parser_used": parser_preference
-            })
-            
-            return {
-                "message": "Resume uploaded and parsed successfully",
-                "parser_used": parser_preference,
-                "parsed_data": parsed_data
-            }
+            # Generate a unique ID for the new candidate
+            candidate_id = str(uuid.uuid4())
+
+            # Create a Candidate object from the parsed data
+            candidate = Candidate(
+                candidate_id=candidate_id,
+                name=parsed_data.get("name"),
+                email=parsed_data.get("email"),
+                mobile_number=parsed_data.get("mobile_number"),
+                skills=parsed_data.get("skills", []),
+                experience=parsed_data.get("experience", []),
+                education=parsed_data.get("education", []),
+                resume_file_path=permanent_path,  # The path we saved earlier
+                # Set default status
+                status="Pending" 
+            )
+
+            # Save the complete candidate object to Redis with the correct key format
+            redis_conn.set(f"candidate:{candidate_id}", candidate.json(), ex=86400) # 24-hour expiry
+            logger.info(f"Successfully created and stored candidate {candidate_id}")
+
+            # Return the newly created candidate object
+            return candidate
             
         except Exception as parsing_error:
             logger.error(f"Error parsing resume with {parser_preference}: {str(parsing_error)}")

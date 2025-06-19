@@ -37,6 +37,7 @@ class Job(BaseModel):
     description: Optional[str] = None
     salary: Optional[str] = None
     posted_date: Optional[str] = None
+    score: Optional[float] = None
 
 class ApplyRequest(BaseModel):
     candidate_id: str

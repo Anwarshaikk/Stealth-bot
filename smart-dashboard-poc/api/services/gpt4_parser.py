@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 from openai import OpenAI
 from typing import Dict, Any
 import PyPDF2
@@ -66,7 +67,23 @@ def parse_with_gpt4(file_path: str) -> Dict[str, Any]:
         )
         
         # Parse and validate the response
-        parsed_data = eval(response.choices[0].message.content)
+        try:
+            # The response from the model is a JSON string, so we need to parse it
+            response_text = response.choices[0].message.content
+            # It's common for the model to wrap the JSON in ```json ... ```
+            if response_text.startswith("```json"):
+                response_text = response_text[7:-3] # Strip the markdown code block
+
+            parsed_data = json.loads(response_text)
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode JSON from GPT-4 response: {e}")
+            logger.error(f"Raw response was: {response.choices[0].message.content}")
+            # Return a structured error or an empty dict
+            return {"error": "Failed to parse GPT-4 response"}
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during GPT-4 parsing: {e}")
+            return {"error": "An unexpected error occurred"}
         
         # Ensure all required fields are present
         required_fields = ["name", "email", "mobile_number", "skills", "experience", "education"]
