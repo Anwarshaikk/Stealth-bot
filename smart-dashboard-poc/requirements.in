@@ -1,0 +1,14 @@
+# requirements.in
+
+fastapi
+uvicorn[standard]
+redis
+rq
+python-docx
+pyresparser
+beautifulsoup4
+requests
+playwright
+openai
+google-cloud-documentai
+PyPDF2 

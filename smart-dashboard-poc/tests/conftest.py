@@ -1,0 +1,1 @@
+# Minimal conftest for pytest (can be empty unless fixtures are needed globally) 

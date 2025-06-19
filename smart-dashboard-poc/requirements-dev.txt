@@ -1,0 +1,5 @@
+# requirements-dev.txt
+
+pip-tools
+flake8
+isort 
